@@ -1,7 +1,10 @@
 import socket
 import sys
+import json
 
-from common.utils import *
+from common.utils import send_message, get_message
+from common.variables import ACTION, PRESENCE, USER, ACCOUNT_NAME, \
+    TIME, RESPONSE, RESPONDEFAULT_IP_ADDRESSES, ERROR, DEFAULT_PORT, MAX_CONNECTIONS
 
 
 def process_client_message(message):
@@ -35,7 +38,6 @@ def main():
         else:
             listen_address = ''
     except IndexError:
-        # Нижк добавить штукенцию
         print('После порта \'a\'- необходимо указать адрес, который будет слушать с порта')
         sys.exit(1)
 

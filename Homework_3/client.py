@@ -1,7 +1,11 @@
 import socket
 import sys
 import time
-from common.utils import *
+import json
+
+from common.variables import ACTION, PRESENCE, TIME, USER, ACCOUNT_NAME, RESPONSE, ERROR, \
+    DEFAULT_IP_ADDRESS, DEFAULT_PORT
+from common.utils import send_message, get_message
 
 
 def create_presence(account_name='Guest'):

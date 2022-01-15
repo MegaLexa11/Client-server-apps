@@ -1,5 +1,5 @@
 import json
-from variables import *
+from .variables import MAX_PACKAGE_LENGTH, ENCODING
 
 
 def get_message(client):
