@@ -19,9 +19,12 @@ ACTION = 'action'
 TIME = 'time'
 USER = 'user'
 ACCOUNT_NAME = 'account_name'
+SENDER = 'sender'
 
 # Прочее
 PRESENCE = 'presence'
 RESPONSE = 'response'
 ERROR = 'error'
 RESPONDEFAULT_IP_ADDRESSES = 'respondefault_ip_addresses'
+MESSAGE = 'message'
+MESSAGE_TEXT = 'mess_text'
