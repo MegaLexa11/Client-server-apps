@@ -7,21 +7,17 @@ from subprocess import Popen, PIPE
 def host_ping(address_list):
     param = '-n' if platform.system().lower() == 'windows' else '-c'
     send_times = '1'  # Для ускорения работы
-    result_list = []
+    result_list = ([], [])
     for address in address_list:
         args = ['ping', param, send_times, address]
         reply = Popen(args, stdout=PIPE, stderr=PIPE)
         code = reply.wait()
         if code == 0:
             print(f'{address}: access available.')
-            connection_success = True
+            result_list[0].append(address)
         else:
             print(f'{address}: access denied.')
-            connection_success = False
-        result_list.append({
-            'ip address': address,
-            'connection success': connection_success
-        })
+            result_list[1].append(address)
     return result_list
 
 
@@ -41,14 +37,27 @@ def host_range_ping(from_ip, to_ip):
 
 
 def host_range_ping_tab(from_ip, to_ip):
-    ip_tab = host_range_ping(from_ip, to_ip)
+    ip_reachable, ip_unreachable = host_range_ping(from_ip, to_ip)
+    counter = max(len(ip_reachable), len(ip_unreachable))
+    ip_tab = []
+    for ind in range(counter):
+        try:
+            ip_r = ip_reachable[ind]
+        except IndexError:
+            ip_r = ''
+        try:
+            ip_u = ip_unreachable[ind]
+        except IndexError:
+            ip_u = ''
+        ip_tab.append((ip_r, ip_u))
+    tab_headers = ['reachable', 'unreachable']
     print('Summary:')
-    print(tabulate(ip_tab, headers="keys", tablefmt='grid'))
+    print(tabulate(ip_tab, headers=tab_headers, tablefmt='grid'))
 
 
 if __name__ == '__main__':
-    addresses = ['google.com', 'yandex.ru', 'some_connection']
-    addr_1 = '127.0.0.6'
+    addresses = ['google.com', '127.0.0.8', 'some_connection']
+    addr_1 = '127.0.0.8'
     addr_2 = '127.0.0.1'
     # host_ping(addresses)
     # host_range_ping(addr_1, addr_2)
