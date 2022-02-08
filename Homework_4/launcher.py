@@ -1,6 +1,7 @@
 import subprocess
 
 PROCESS = []
+client_names = ['John', 'Ann', 'Bob', 'Alice']
 
 while True:
     ACTION = input('Выберите действие: q - выход, '
@@ -18,10 +19,6 @@ while True:
         PROCESS.append(subprocess.Popen('python server.py',
                                         creationflags=subprocess.CREATE_NEW_CONSOLE))
 
-        for i in range(3):
-            PROCESS.append(subprocess.Popen('python client.py',
-                                            creationflags=subprocess.CREATE_NEW_CONSOLE))
-
-        for i in range(3):
-            PROCESS.append(subprocess.Popen('python client_send.py',
+        for name in client_names:
+            PROCESS.append(subprocess.Popen(f'python client.py -n {name}',
                                             creationflags=subprocess.CREATE_NEW_CONSOLE))
