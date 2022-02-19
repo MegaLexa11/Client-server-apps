@@ -4,7 +4,7 @@ import sys
 import json
 import logging
 import time
-
+from threading import Thread
 import select
 
 from descriptors import Port
@@ -15,6 +15,7 @@ from metaclasses import ServerVerifier
 from common.utils import send_message, get_message
 from common.variables import ACTION, PRESENCE, USER, ACCOUNT_NAME, TIME, RESPONSE, ERROR, RESPONSE_200, RESPONSE_400,\
     RESPONDEFAULT_IP_ADDRESSES, DEFAULT_PORT, MAX_CONNECTIONS, MESSAGE, MESSAGE_TEXT, SENDER, DESTINATION, EXIT
+from server_database import ServerDataBase
 
 
 server_logger = logging.getLogger('server')
@@ -23,12 +24,14 @@ server_logger = logging.getLogger('server')
 class Server(metaclass=ServerVerifier):
     port = Port()
 
-    def __init__(self, listen_address, listen_port):
+    def __init__(self, listen_address, listen_port, database):
         self.addr = listen_address
         self.port = listen_port
         self.clients = []
         self.messages = []
         self.names = dict()
+        self.database = database
+        super().__init__()
 
     def init_socket(self):
         server_logger.info(f'Запущен сервер с портом для подключения {self.port}, '
@@ -61,6 +64,8 @@ class Server(metaclass=ServerVerifier):
                 and USER in message:
             if message[USER][ACCOUNT_NAME] not in self.names.keys():
                 self.names[message[USER][ACCOUNT_NAME]] = client
+                client_ip, client_port = client.getpeername()
+                self.database.user_login(message[USER][ACCOUNT_NAME], client_ip, client_port)
                 send_message(client, RESPONSE_200)
             else:
                 response = RESPONSE_400
@@ -74,6 +79,7 @@ class Server(metaclass=ServerVerifier):
             self.messages.append(message)
             return
         elif ACTION in message and message[ACTION] == EXIT and ACCOUNT_NAME in message:
+            self.database.user_logout(message[USER][ACCOUNT_NAME])
             self.clients.remove(self.names[message[ACCOUNT_NAME]])
             self.names[message[ACCOUNT_NAME]].close()
             del self.names[message[ACCOUNT_NAME]]
@@ -108,6 +114,7 @@ class Server(metaclass=ServerVerifier):
 
             if recv_data_lst:
                 for client_with_message in recv_data_lst:
+                    server_logger.info(client_with_message)
                     try:
                         self.process_client_message(get_message(client_with_message), client_with_message)
                     except:
@@ -135,11 +142,53 @@ def arg_parser():
     return listen_address, listen_port
 
 
+def print_help():
+    print('Поддерживаемые комманды:')
+    print('users - список известных пользователей')
+    print('connected - список подключённых пользователей')
+    print('loghist - история входов пользователя')
+    print('exit - завершение работы сервера.')
+    print('help - вывод справки по поддерживаемым командам')
+
+
+def server_func(listen_address, listen_port, database):
+    server = Server(listen_address, listen_port, database)
+    server.daemon = True
+    server.main_loop()
+
+
+def user_interactions(database):
+    print_help()
+    while True:
+        server_input = input('Введите команду: ')
+        if server_input == 'help':
+            print_help()
+        elif server_input == 'exit':
+            break
+        elif server_input == 'users':
+            for user in sorted(database.users_list()):
+                print(f'Пользователь: {user[0]}, последний вход: {user[1]}')
+        elif server_input == 'connected':
+            for user in sorted(database.active_users_list()):
+                print(f'Пользователь {user[0]}, подключен: {user[1]}:{user[2]}, время установки соединения: {user[3]}')
+        elif server_input == 'loghist':
+            name = input('Введите имя пользователя для просмотра истории. '
+                         'Для вывода всей истории, просто нажмите Enter: ')
+            for user in sorted(database.login_history(name)):
+                print(f'Пользователь: {user[0]} время входа: {user[1]}. Вход с: {user[2]}:{user[3]}')
+        else:
+            print('Такой команды не существует!\nСписок существующих команд:')
+            print_help()
+
+
 def main():
     listen_address, listen_port = arg_parser()
+    database = ServerDataBase()
+    thr_runserver = Thread(target=server_func, args=(listen_address, listen_port, database))
+    thr_userinteract = Thread(target=user_interactions, args=(database, ))
 
-    server = Server(listen_address, listen_port)
-    server.main_loop()
+    thr_runserver.start()
+    thr_userinteract.start()
 
 
 if __name__ == '__main__':

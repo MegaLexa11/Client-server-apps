@@ -34,7 +34,7 @@ class ClientSender(threading.Thread, metaclass=ClientVerifier):
     def create_exit_message(self):
         return {
             ACTION: EXIT,
-            ACCOUNT_NAME: self.account_name,
+            ACCOUNT_NAME: self.account_name[0],
             TIME: time.time()
         }
 
