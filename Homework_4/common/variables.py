@@ -14,6 +14,9 @@ MAX_PACKAGE_LENGTH = 1824
 # Кодировка проекта
 ENCODING = 'utf-8'
 
+# Конфигурация сервера
+SERVER_CONFIG = 'server.ini'
+
 # Основные ключи для протокола JIM:
 ACTION = 'action'
 TIME = 'time'
@@ -30,9 +33,18 @@ RESPONDEFAULT_IP_ADDRESSES = 'respondefault_ip_addresses'
 MESSAGE = 'message'
 MESSAGE_TEXT = 'mess_text'
 EXIT = 'exit'
+GET_CONTACTS = 'get_contacts'
+LIST_INFO = 'list_info'
+REMOVE_CONTACT = 'remove'
+ADD_CONTACT = 'add'
+USERS_REQUEST = 'get_users'
 
 # Словари - ответы
 RESPONSE_200 = {RESPONSE: 200}
+
+RESPONSE_202 = {RESPONSE: 202,
+                LIST_INFO: None}
+
 RESPONSE_400 = {
     RESPONSE: 400,
     ERROR: None

@@ -1,12 +1,16 @@
 import logging
+import sys
 
-server_logger = logging.getLogger('Server')
+if sys.argv[0].find('client') == -1:
+    logger = logging.getLogger('server')
+else:
+    logger = logging.getLogger('client')
 
 
 class Port:
     def __set__(self, instance, value):
         if not 1023 < value < 65536:
-            server_logger.critical(f'Попытка запуска сервера с неверно указанным портом {value}. '
+            logger.critical(f'Попытка запуска сервера с неверно указанным портом {value}. '
                                    f'Доступные адреса портов с 1024 по 65535')
             exit(1)
 
