@@ -20,7 +20,7 @@ class ServerDataBase:
     class ActiveUsers(Base):
         __tablename__ = 'active_users'
         id = Column(Integer, primary_key=True)
-        user = Column(String, ForeignKey('all_users.id'), unique=True)
+        user = Column(Integer, ForeignKey('all_users.id'), unique=True)
         ip = Column(String)
         port = Column(Integer)
         connection_time = Column(DateTime)
@@ -34,7 +34,7 @@ class ServerDataBase:
     class LoginHistory(Base):
         __tablename__ = 'login_history'
         id = Column(Integer, primary_key=True)
-        user = Column(String, ForeignKey('all_users.id'))
+        user = Column(Integer, ForeignKey('all_users.id'))
         ip = Column(String)
         port = Column(Integer)
         connection_time = Column(DateTime)
@@ -48,8 +48,8 @@ class ServerDataBase:
     class UserContacts(Base):
         __tablename__ = 'user_contacts'
         id = Column(Integer, primary_key=True)
-        user = Column(String, ForeignKey('all_users.id'))
-        contact = Column(String, ForeignKey('all_users.id'))
+        user = Column(Integer, ForeignKey('all_users.id'))
+        contact = Column(Integer, ForeignKey('all_users.id'))
 
         def __init__(self, user, contact):
             self.user = user
@@ -58,7 +58,7 @@ class ServerDataBase:
     class UserHistory(Base):
         __tablename__ = 'user_history'
         id = Column(Integer, primary_key=True)
-        user = Column(String, ForeignKey('all_users.id'))
+        user = Column(Integer, ForeignKey('all_users.id'))
         sent = Column(Integer)
         accepted = Column(Integer)
 
@@ -104,13 +104,13 @@ class ServerDataBase:
         self.session.commit()
 
     def process_message(self, sender, receiver):
-        sender = self.session.query(self.AllUsers).filter_by(login=sender).first()
-        receiver = self.session.query(self.AllUsers).filter_by(login=receiver).first()
+        sender = self.session.query(self.AllUsers).filter_by(login=sender).first().id
+        receiver = self.session.query(self.AllUsers).filter_by(login=receiver).first().id
 
-        sender_row = self.session.query(self.UserHistory).filter_by(user=sender.id).first()
+        sender_row = self.session.query(self.UserHistory).filter_by(user=sender).first()
         sender_row.sent += 1
 
-        receiver_row = self.session.query(self.UserHistory).filter_by(user=receiver.id).first()
+        receiver_row = self.session.query(self.UserHistory).filter_by(user=receiver).first()
         receiver_row.accepted += 1
 
         self.session.commit()
@@ -166,8 +166,8 @@ class ServerDataBase:
         return query.all()
 
     def get_contacts(self, user):
-        user = self.session.query(self.AllUsers).filter_by(login=user).first()
-        query = self.session.query(self.UserContacts).filter_by(user=user.id).\
+        user = self.session.query(self.AllUsers).filter_by(login=user).one()
+        query = self.session.query(self.UserContacts, self.AllUsers.login).filter_by(user=user.id).\
             join(self.AllUsers, self.UserContacts.contact == self.AllUsers.id)
         return [contact[1] for contact in query.all()]
 
