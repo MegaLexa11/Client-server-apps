@@ -26,10 +26,10 @@ from server_database import ServerDataBase
 from server_gui import MainWindow, gui_create_model, HistoryWindow, create_stat_model, ConfigWindow
 
 
-server_logger = logging.getLogger('server')
+logger = logging.getLogger('server')
 
 new_connection = False
-cont_flag_lock = threading.Lock
+con_flag_lock = threading.Lock()
 
 
 class Server(threading.Thread, metaclass=ServerVerifier):
@@ -45,9 +45,9 @@ class Server(threading.Thread, metaclass=ServerVerifier):
         super().__init__()
 
     def init_socket(self):
-        server_logger.info(f'Запущен сервер с портом для подключения {self.port}, '
-                           f'адрес, с которого принимаются подключения: {self.addr}, '
-                           f'Если адрес не указан, прнимаются соединения с любых адресов.')
+        logger.info(f'Запущен сервер с портом для подключения {self.port}, '
+                    f'адрес, с которого принимаются подключения: {self.addr}, '
+                    f'Если адрес не указан, прнимаются соединения с любых адресов.')
         transport = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         transport.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         transport.bind((self.addr, self.port))
@@ -61,17 +61,17 @@ class Server(threading.Thread, metaclass=ServerVerifier):
         message_send = message[SENDER]
         if message_dest in self.names and self.names[message_dest] in listen_socks:
             send_message(self.names[message_dest], message)
-            server_logger.info(f'Отправлено сообщение пользователю {message_dest} '
+            logger.info(f'Отправлено сообщение пользователю {message_dest} '
                                f'от пользователя {message_send}.')
         elif message_dest in self.names and self.names[message_dest] not in listen_socks:
             raise ConnectionError
         else:
-            server_logger.error(f'Пользователь {message_dest} не зарегистрирован на сервере, '
-                                f'отправка сообщения невозможна.')
+            logger.error(f'Пользователь {message_dest} не зарегистрирован на сервере, '
+                         f'отправка сообщения невозможна.')
 
     def process_client_message(self, message, client):
         global new_connection
-        server_logger.debug(f'Разбор сообщения от клиента: {message}')
+        logger.debug(f'Разбор сообщения от клиента: {message}')
         if ACTION in message and message[ACTION] == PRESENCE and TIME in message \
                 and USER in message:
             if message[USER][ACCOUNT_NAME] not in self.names.keys():
@@ -79,7 +79,7 @@ class Server(threading.Thread, metaclass=ServerVerifier):
                 client_ip, client_port = client.getpeername()
                 self.database.user_login(message[USER][ACCOUNT_NAME], client_ip, client_port)
                 send_message(client, RESPONSE_200)
-                with cont_flag_lock:
+                with con_flag_lock:
                     new_connection = True
             else:
                 response = RESPONSE_400
@@ -90,26 +90,34 @@ class Server(threading.Thread, metaclass=ServerVerifier):
             return
 
         elif ACTION in message and message[ACTION] == MESSAGE and SENDER in message and \
-                DESTINATION in message and TIME in message and MESSAGE_TEXT in message:
-            self.messages.append(message)
-            self.database.process_message(message[SENDER], message[DESTINATION])
+                DESTINATION in message and TIME in message and MESSAGE_TEXT in message and \
+                self.names[message[SENDER]] == client:
+            if message[DESTINATION] in self.names:
+                self.messages.append(message)
+                self.database.process_message(message[SENDER], message[DESTINATION])
+                send_message(client, RESPONSE_200)
+            else:
+                response = RESPONSE_400
+                response[ERROR] = 'Пользователь не зарегистрирован на сервере.'
+                send_message(client, response)
             return
 
         elif ACTION in message and message[ACTION] == EXIT and ACCOUNT_NAME in message\
                 and self.names[message[ACCOUNT_NAME]] == client:
-            self.database.user_logout(message[USER][ACCOUNT_NAME])
-            server_logger.info(f'Клиент {message[ACCOUNT_NAME]} корректно отключился от сервера.')
+            self.database.user_logout(message[ACCOUNT_NAME])
+            logger.info(f'Клиент {message[ACCOUNT_NAME]} корректно отключился от сервера.')
             self.clients.remove(self.names[message[ACCOUNT_NAME]])
             self.names[message[ACCOUNT_NAME]].close()
             del self.names[message[ACCOUNT_NAME]]
-            with cont_flag_lock:
+            with con_flag_lock:
                 new_connection = True
             return
 
-        elif ACTION in message and message[ACTION] == GET_CONTACTS and ACCOUNT_NAME in message and USER in message and \
+        elif ACTION in message and message[ACTION] == GET_CONTACTS and USER in message and \
                 self.names[message[USER]] == client:
             response = RESPONSE_202
             response[LIST_INFO] = self.database.get_contacts(message[USER])
+            print(response)
             send_message(client, response)
 
         elif ACTION in message and message[ACTION] == ADD_CONTACT and ACCOUNT_NAME in message and USER in message and \
@@ -117,13 +125,13 @@ class Server(threading.Thread, metaclass=ServerVerifier):
             self.database.add_contact(message[USER], message[ACCOUNT_NAME])
             send_message(client, RESPONSE_200)
 
-        elif ACTION in message and message[ACTION] == REMOVE_CONTACT and ACCOUNT_NAME in message and USER in message and \
-                self.names[message[USER]] == client:
+        elif ACTION in message and message[ACTION] == REMOVE_CONTACT and ACCOUNT_NAME in message and \
+                USER in message and self.names[message[USER]] == client:
             self.database.remove_contact(message[USER], message[ACCOUNT_NAME])
             send_message(client, RESPONSE_200)
 
-        elif ACTION in message and message[ACTION] == USERS_REQUEST and ACCOUNT_NAME in message and USER in message and \
-                self.names[message[USER]] == client:
+        elif ACTION in message and message[ACTION] == USERS_REQUEST and ACCOUNT_NAME in message \
+                and USER in message and self.names[message[USER]] == client:
             response = RESPONSE_202
             response[LIST_INFO] = [user[0] for user in self.database.users_list()]
             send_message(client, response)
@@ -134,7 +142,8 @@ class Server(threading.Thread, metaclass=ServerVerifier):
             send_message(client, response)
             return
 
-    def main_loop(self):
+    def run(self):
+        global new_connection
         self.init_socket()
 
         while True:
@@ -143,7 +152,7 @@ class Server(threading.Thread, metaclass=ServerVerifier):
             except OSError:
                 pass
             else:
-                server_logger.info(f'Установлено соединение с ПК {client_address}.')
+                logger.info(f'Установлено соединение с ПК {client_address}.')
                 self.clients.append(client)
 
             recv_data_lst = []
@@ -154,30 +163,34 @@ class Server(threading.Thread, metaclass=ServerVerifier):
                 if self.clients:
                     recv_data_lst, send_data_lst, err_lst = select.select(self.clients, self.clients, [], 0)
             except OSError as err:
-                server_logger.error(f'Ошибка работы с сокетами {err}.')
+                logger.error(f'Ошибка работы с сокетами {err}.')
 
             if recv_data_lst:
                 for client_with_message in recv_data_lst:
-                    server_logger.info(client_with_message)
+                    logger.info(client_with_message)
                     try:
                         self.process_client_message(get_message(client_with_message), client_with_message)
                     except OSError:
-                        server_logger.info(f'Клиент {client_with_message.getpeername()} отключился от сервера.')
+                        logger.info(f'Клиент {client_with_message.getpeername()} отключился от сервера.')
                         for name in self.names:
                             if self.names[name] == client_with_message:
                                 self.database.user_logout(name)
                                 del self.names[name]
                                 break
                         self.clients.remove(client_with_message)
+                        with con_flag_lock:
+                            new_connection = True
 
             for message in self.messages:
                 try:
                     self.process_message(message, send_data_lst)
                 except (ConnectionAbortedError, ConnectionError, ConnectionResetError, ConnectionRefusedError):
-                    server_logger.info(f'Связь с клиентом {message[DESTINATION]} была потеряна.')
+                    logger.info(f'Связь с клиентом {message[DESTINATION]} была потеряна.')
                     self.clients.remove(self.names[message[DESTINATION]])
                     self.database.user_logout(message[DESTINATION])
                     del self.names[message[DESTINATION]]
+                    with con_flag_lock:
+                        new_connection = True
             self.messages.clear()
 
 
@@ -192,22 +205,39 @@ def arg_parser(default_port, default_address):
     return listen_address, listen_port
 
 
-def server_func(listen_address, listen_port, database):
-    server = Server(listen_address, listen_port, database)
-    server.daemon = True
-    server.main_loop()
+def config_load():
+    config = configparser.ConfigParser()
+    conf_path = os.path.dirname(os.path.realpath(__file__))
+    conf_file = 'server.ini'
+    config.read(f'{conf_path}/{conf_file}')
+    if 'SETTINGS' in config:
+        return config
+    else:
+        config.add_section('SETTINGS')
+        config.set('SETTINGS', 'Default_port', str(DEFAULT_PORT))
+        config.set('SETTINGS', 'Listen_Address', '')
+        config.set('SETTINGS', 'Database_path', '')
+        config.set('SETTINGS', 'Database_file', 'server_base.db3')
+        return config
+
+
+# def server_func(listen_address, listen_port, database):
+#     server = Server(listen_address, listen_port, database)
+#     server.daemon = True
+#     server.start()
 
 
 def main():
-    config = configparser.ConfigParser()
-    config_path = os.path.dirname(os.path.realpath(__file__))
-    config.read(f'{config_path}/server.ini')
+    config = config_load()
 
     listen_address, listen_port = arg_parser(config['SETTINGS']['Default_port'], config['SETTINGS']['Listen_Address'])
     database = ServerDataBase(os.path.join(config['SETTINGS']['Database_path'], config['SETTINGS']['Database_file']))
 
-    thr_runserver = Thread(target=server_func, args=(listen_address, listen_port, database))
-    thr_runserver.start()
+    # thr_runserver = Thread(target=server_func, args=(listen_address, listen_port, database))
+    # thr_runserver.start()
+    server = Server(listen_address, listen_port, database)
+    server.daemon = True
+    server.start()
 
     server_app = QApplication(sys.argv)
     main_window = MainWindow()
@@ -223,7 +253,7 @@ def main():
             main_window.active_clients_table.setModel(gui_create_model(database))
             main_window.active_clients_table.resizeColumnsToContents()
             main_window.active_clients_table.resizeRowsToContents()
-            with cont_flag_lock:
+            with con_flag_lock:
                 new_connection = False
 
     def show_statistics():
@@ -256,8 +286,9 @@ def main():
             config['SETTINGS']['Listen_Address'] = config_window.ip.text()
             if 1023 < port < 65536:
                 config['SETTINGS']['Default_port'] = str(port)
-                print(port)
-                with open('server.ini', 'w') as conf:
+                dir_path = os.path.dirname(os.path.realpath(__file__))
+                new_conf_file = 'server_dist.ini'
+                with open(f'{dir_path}/{new_conf_file}', 'w') as conf:
                     config.write(conf)
                     message.information(
                         config_window, 'OK', 'Настройки успешно сохранены!')
