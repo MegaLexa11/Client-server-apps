@@ -10,6 +10,11 @@ logger = logging.getLogger('client')
 
 
 class DelContactDialog(QDialog):
+    """
+    Диалог удаления контакта. Предлагает текущий список контактов,
+    не имеет обработчиков для действий.
+    """
+
     def __init__(self, database):
         super().__init__()
         self.database = database

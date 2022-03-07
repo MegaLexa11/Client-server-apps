@@ -8,6 +8,12 @@ logger = logging.getLogger('client')
 
 
 class AddContactDialog(QDialog):
+    '''
+    Диалог добавления пользователя в список контактов.
+    Предлагает пользователю список возможных контактов и
+    добавляет выбранный в контакты пользователя.
+    '''
+
     def __init__(self, trans, db):
         super().__init__()
         self.transport = trans
@@ -43,6 +49,11 @@ class AddContactDialog(QDialog):
         self.btn_refresh.clicked.connect(self.update_possible_contacts)
 
     def possible_contacts_update(self):
+        '''
+        Метод заполнения списка возможных контактов для диалогового окна.
+        Создаёт список всех зарегистрированных пользователей
+        за исключением уже добавленных в контакты пользователя и самого себя.
+        '''
         self.selector.clear()
 
         contacts_list = set(self.database.get_contacts())
@@ -51,6 +62,10 @@ class AddContactDialog(QDialog):
         self.selector.addItems(users_list - contacts_list)
 
     def update_possible_contacts(self):
+        '''
+        Метод обновления списка возможных контактов. Запрашивает с сервера
+        список известных пользователей и обновляет содержимое окна.
+        '''
         try:
             self.transport.user_list_update()
         except OSError:

@@ -3,6 +3,12 @@ import dis
 
 # Метакласс для проверки сервера:
 class ServerVerifier(type):
+    '''
+    Метакласс, проверяющий, что в результирующем классе нет клиентских
+    вызовов, таких как: connect. Также проверяется, что серверный
+    сокет является TCP и работает по IPv4 протоколу.
+    '''
+
     def __init__(cls, cls_name, bases, cls_dict):
         methods = []
         attrs = []
@@ -32,6 +38,12 @@ class ServerVerifier(type):
 
 # Метакласс для проверки клиентов
 class ClientVerifier(type):
+    '''
+    Метакласс, проверяющий, что в результирующем классе нет серверных
+    вызовов таких как: accept, listen. Также проверяется, что сокет не
+    создаётся внутри конструктора класса.
+    '''
+
     def __init__(cls, cls_name, bases, cls_dict):
         methods = []
         for func in cls_dict:
