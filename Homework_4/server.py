@@ -19,6 +19,7 @@ logger = logging.getLogger('server')
 
 @log
 def arg_parser(default_port, default_address):
+    """Парсер аргументов коммандной строки."""
     parser = argparse.ArgumentParser()
     parser.add_argument('-p', default=default_port, type=int, nargs='?')
     parser.add_argument('-a', default=default_address, nargs='?')
@@ -31,6 +32,7 @@ def arg_parser(default_port, default_address):
 
 
 def config_load():
+    """Парсер конфигурационного ini файла."""
     config = configparser.ConfigParser()
     conf_path = os.path.dirname(os.path.realpath(__file__))
     conf_file = 'server.ini'
@@ -47,6 +49,7 @@ def config_load():
 
 @log
 def main():
+    '''Основная функция.'''
     config = config_load()
 
     listen_address, listen_port, gui_flag = arg_parser(
