@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import create_engine, Column, Text, Integer, String, DateTime, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import datetime
@@ -12,15 +12,18 @@ class ServerDataBase:
         id = Column(Integer, primary_key=True)
         login = Column(String, unique=True)
         last_login = Column(DateTime)
+        passwd_hash = Column(String)
+        pubkey = Column(Text)
 
-        def __init__(self, login):
+        def __init__(self, login, passwd_hash):
             self.login = login
+            self.passwd_hash = passwd_hash
             self.last_login = datetime.datetime.now()
 
     class ActiveUsers(Base):
         __tablename__ = 'active_users'
         id = Column(Integer, primary_key=True)
-        user = Column(String, ForeignKey('all_users.id'), unique=True)
+        user = Column(Integer, ForeignKey('all_users.id'), unique=True)
         ip = Column(String)
         port = Column(Integer)
         connection_time = Column(DateTime)
@@ -34,7 +37,7 @@ class ServerDataBase:
     class LoginHistory(Base):
         __tablename__ = 'login_history'
         id = Column(Integer, primary_key=True)
-        user = Column(String, ForeignKey('all_users.id'))
+        user = Column(Integer, ForeignKey('all_users.id'))
         ip = Column(String)
         port = Column(Integer)
         connection_time = Column(DateTime)
@@ -48,8 +51,8 @@ class ServerDataBase:
     class UserContacts(Base):
         __tablename__ = 'user_contacts'
         id = Column(Integer, primary_key=True)
-        user = Column(String, ForeignKey('all_users.id'))
-        contact = Column(String, ForeignKey('all_users.id'))
+        user = Column(Integer, ForeignKey('all_users.id'))
+        contact = Column(Integer, ForeignKey('all_users.id'))
 
         def __init__(self, user, contact):
             self.user = user
@@ -58,7 +61,7 @@ class ServerDataBase:
     class UserHistory(Base):
         __tablename__ = 'user_history'
         id = Column(Integer, primary_key=True)
-        user = Column(String, ForeignKey('all_users.id'))
+        user = Column(Integer, ForeignKey('all_users.id'))
         sent = Column(Integer)
         accepted = Column(Integer)
 
@@ -79,23 +82,25 @@ class ServerDataBase:
         self.session.query(self.ActiveUsers).delete()
         self.session.commit()
 
-    def user_login(self, username, ip_address, port):
+    def user_login(self, username, ip_address, port, key):
         res = self.session.query(self.AllUsers).filter_by(login=username)
 
         if res.count():
             user = res.first()
             user.last_login = datetime.datetime.now()
+            if user.pubkey != key:
+                user.pubkey = key
         else:
-            user = self.AllUsers(username)
-            self.session.add(user)
-            self.session.commit()
-            user_history = self.UserHistory(user.id)
-            self.session.add(user_history)
+            raise ValueError('Пользователь не зарегистрирован.')
 
-        new_active_user = self.ActiveUsers(user.id, ip_address, port, datetime.datetime.now())
+        new_active_user = self.ActiveUsers(
+            user.id, ip_address, port, datetime.datetime.now())
         self.session.add(new_active_user)
-        history = self.LoginHistory(user.id, ip_address, port, datetime.datetime.now())
+
+        history = self.LoginHistory(
+            user.id, ip_address, port, datetime.datetime.now())
         self.session.add(history)
+
         self.session.commit()
 
     def user_logout(self, username):
@@ -104,16 +109,48 @@ class ServerDataBase:
         self.session.commit()
 
     def process_message(self, sender, receiver):
-        sender = self.session.query(self.AllUsers).filter_by(login=sender).first()
-        receiver = self.session.query(self.AllUsers).filter_by(login=receiver).first()
+        sender = self.session.query(self.AllUsers).filter_by(login=sender).first().id
+        receiver = self.session.query(self.AllUsers).filter_by(login=receiver).first().id
 
-        sender_row = self.session.query(self.UserHistory).filter_by(user=sender.id).first()
+        sender_row = self.session.query(self.UserHistory).filter_by(user=sender).first()
         sender_row.sent += 1
 
-        receiver_row = self.session.query(self.UserHistory).filter_by(user=receiver.id).first()
+        receiver_row = self.session.query(self.UserHistory).filter_by(user=receiver).first()
         receiver_row.accepted += 1
 
         self.session.commit()
+
+    def add_user(self, name, passwd_hash):
+        user_row = self.AllUsers(name, passwd_hash)
+        self.session.add(user_row)
+        self.session.commit()
+        history_row = self.UserHistory(user_row.id)
+        self.session.add(history_row)
+        self.session.commit()
+
+    def remove_user(self, name):
+        user = self.session.query(self.AllUsers).filter_by(login=name).first()
+        self.session.query(self.ActiveUsers).filter_by(login=user.id).delete()
+        self.session.query(self.LoginHistory).filter_by(user=user.id).delete()
+        self.session.query(self.UserContacts).filter_by(user=user.id).delete()
+        self.session.query(self.UserContacts).filter_by(contact=user.id).delete()
+        self.session.query(self.UserHistory).filter_by(user=user.id).delete()
+        self.session.query(self.AllUsers).filter_by(login=name).delete()
+        self.session.commit()
+
+    def get_hash(self, name):
+        user = self.session.query(self.AllUsers).filter_by(login=name).first()
+        return user.passwd_hash
+
+    def get_pubkey(self, name):
+        user = self.session.query(self.AllUsers).filter_by(login=name).first()
+        return user.pubkey
+
+    def check_user(self, name):
+        if self.session.query(self.AllUsers).filter_by(login=name).count():
+            return True
+        else:
+            return False
 
     def add_contact(self, user, contact):
         user = self.session.query(self.AllUsers).filter_by(login=user).first()
@@ -166,8 +203,8 @@ class ServerDataBase:
         return query.all()
 
     def get_contacts(self, user):
-        user = self.session.query(self.AllUsers).filter_by(login=user).first()
-        query = self.session.query(self.UserContacts).filter_by(user=user.id).\
+        user = self.session.query(self.AllUsers).filter_by(login=user).one()
+        query = self.session.query(self.UserContacts, self.AllUsers.login).filter_by(user=user.id).\
             join(self.AllUsers, self.UserContacts.contact == self.AllUsers.id)
         return [contact[1] for contact in query.all()]
 

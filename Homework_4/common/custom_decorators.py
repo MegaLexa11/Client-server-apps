@@ -1,14 +1,15 @@
 import logging
 import inspect
+import socket
 import sys
 import logging
 import logs.config_server_log
 import logs.config_client_log
 
 if sys.argv[0].find('client') == -1:
-    func_logger = logging.getLogger('client')
-else:
     func_logger = logging.getLogger('server')
+else:
+    func_logger = logging.getLogger('client')
 
 
 def log(func):

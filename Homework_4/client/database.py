@@ -1,6 +1,10 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Text
+from sqlalchemy import create_engine, Table, Column, Integer, String, Text, MetaData, DateTime
+from sqlalchemy.orm import mapper, sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+import os
+import sys
+sys.path.append('..')
+from common.variables import *
 import datetime
 
 
@@ -38,7 +42,9 @@ class ClientDatabase:
             self.name = contact
 
     def __init__(self, name):
-        self.engine = create_engine(f'sqlite:///client_{name}.db3', echo=False, pool_recycle=7200,
+        path = os.path.dirname(os.path.realpath(__file__))
+        filename = f'client_{name}.db3'
+        self.engine = create_engine(f'sqlite:///{os.path.join(path, filename)}', echo=False, pool_recycle=7200,
                                     connect_args={'check_same_thread': False})
 
         self.Base.metadata.create_all(self.engine)
@@ -96,6 +102,10 @@ class ClientDatabase:
             query = query.filter_by(to_user=to_user)
         return [(history_row.from_user, history_row.to_user, history_row.message, history_row.date)
                 for history_row in query.all()]
+
+    def contacts_clear(self):
+        self.session.query(self.Contacts).delete()
+        self.session.commit()
 
 
 if __name__ == '__main__':
